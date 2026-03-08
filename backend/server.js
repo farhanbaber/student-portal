@@ -4,6 +4,7 @@ import dotenv from 'dotenv'
 import mongoose from 'mongoose'
 import multer from 'multer'
 import path from 'path'
+import fs from 'fs' // Directory check karne ke liye
 import { fileURLToPath } from 'url'
 import { Student } from './models/Student.js'
 
@@ -13,19 +14,25 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
 const app = express()
+
+// 1. CHANGE: Port ko 0.0.0.0 par bind karna Railway ke liye zaroori hai
 const PORT = process.env.PORT || 5000
 
-// Development CORS: allow all origins (safe for local dev)
+// 2. CHANGE: CORS ko behtar handle karein (Frontend URL ke liye jagah chhorein)
 app.use(
   cors({
-    origin: true,
+    origin: '*', // Production mein yahan apna Vercel URL dal dena
     methods: ['GET', 'POST'],
   }),
 )
 
 app.use(express.json())
 
+// 3. CHANGE: Ensure uploads directory exists (Railway build ke waqt error nahi dega)
 const uploadsDir = path.join(__dirname, 'uploads')
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
 app.use('/uploads', express.static(uploadsDir))
 
 const storage = multer.diskStorage({
@@ -52,7 +59,7 @@ app.get('/api/students', async (_req, res) => {
   } catch (error) {
     console.error('Error fetching students:', error)
     return res.status(500).json({
-      message: 'Failed to fetch students. Please try again later.',
+      message: 'Failed to fetch students.',
     })
   }
 })
@@ -69,9 +76,7 @@ app.post('/api/submit', upload.single('graduationPhoto'), async (req, res) => {
     } = req.body
 
     if (!req.file) {
-      return res
-        .status(400)
-        .json({ message: 'Graduation photo is required.' })
+      return res.status(400).json({ message: 'Graduation photo is required.' })
     }
 
     const photoPath = `/uploads/${req.file.filename}`
@@ -95,15 +100,15 @@ app.post('/api/submit', upload.single('graduationPhoto'), async (req, res) => {
   } catch (error) {
     console.error('Error saving student:', error)
     return res.status(500).json({
-      message: 'Failed to submit application. Please try again later.',
+      message: 'Failed to submit application.',
     })
   }
 })
 
 async function start() {
-  const mongoUri = process.env.MONGO_URI
+  const mongoUri = process.env.MONGO_URI // Railway Variables mein ye naam lazmi ho
   if (!mongoUri) {
-    console.error('MONGO_URI is not set in .env')
+    console.error('MONGO_URI is not set!')
     process.exit(1)
   }
 
@@ -111,9 +116,9 @@ async function start() {
     await mongoose.connect(mongoUri)
     console.log('Connected to MongoDB Atlas')
 
-    app.listen(PORT, () => {
-      console.log(`Server listening on http://localhost:${PORT}`)
-      console.log('CORS: allowing all origins (dev mode)')
+    // 4. CHANGE: Host '0.0.0.0' specify karna Railway deployment ke liye best practice hai
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server listening on port ${PORT}`)
     })
   } catch (error) {
     console.error('Failed to connect to MongoDB:', error)
@@ -122,4 +127,3 @@ async function start() {
 }
 
 start()
-
