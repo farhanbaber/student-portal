@@ -104,9 +104,8 @@ app.post('/api/submit', upload.single('graduationPhoto'), async (req, res) => {
     })
   }
 })
-
 async function start() {
-  const mongoUri = process.env.MONGO_URI // Railway Variables mein ye naam lazmi ho
+  const mongoUri = process.env.MONGO_URI
   if (!mongoUri) {
     console.error('MONGO_URI is not set!')
     process.exit(1)
@@ -116,14 +115,13 @@ async function start() {
     await mongoose.connect(mongoUri)
     console.log('Connected to MongoDB Atlas')
 
-    // 4. CHANGE: Host '0.0.0.0' specify karna Railway deployment ke liye best practice hai
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server listening on port ${PORT}`)
     })
   } catch (error) {
-    console.error('Failed to connect to MongoDB:', error)
+    // Yahan res nahi aa sakta, sirf console.log hoga
+    console.error('DATABASE CONNECTION ERROR:', error)
     process.exit(1)
   }
 }
-
 start()

@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, type ChangeEvent, type FormEvent } from 'react'
 import axios from 'axios'
 import { motion, AnimatePresence } from 'framer-motion'
 
+// --- Types & Interfaces ---
 type WorkingPlan = 'Full-Time' | 'Remote'
 
 interface FormState {
@@ -36,109 +37,57 @@ const initialFormState: FormState = {
   graduationPhoto: null,
 }
 
-const API_BASE_URL = 'http://localhost:5000'
+const API_BASE_URL = 'https://student-portal-production-a736.up.railway.app'
 
-export function App() {
+function App() {
   const [form, setForm] = useState<FormState>(initialFormState)
-  const [submitting, setSubmitting] = useState(false)
-  const [successMessage, setSuccessMessage] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
+  const [submitting, setSubmitting] = useState<boolean>(false)
+  const [successMessage, setSuccessMessage] = useState<string>('')
+  const [errorMessage, setErrorMessage] = useState<string>('')
   const [activeView, setActiveView] = useState<'form' | 'dashboard'>('form')
   const [students, setStudents] = useState<Student[]>([])
-  const [loadingStudents, setLoadingStudents] = useState(false)
+  const [loadingStudents, setLoadingStudents] = useState<boolean>(false)
 
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [showLoginModal, setShowLoginModal] = useState(false)
-  const [loginEmail, setLoginEmail] = useState('')
-  const [loginPassword, setLoginPassword] = useState('')
-
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
   const [photoModalUrl, setPhotoModalUrl] = useState<string | null>(null)
-  const [photoLoading, setPhotoLoading] = useState(false)
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => {
+  // Handlers
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setForm(prev => ({ ...prev, [name]: value }))
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null
     setForm(prev => ({ ...prev, graduationPhoto: file }))
   }
 
-  const resetMessages = () => {
-    setSuccessMessage('')
-    setErrorMessage('')
-  }
-
   const fetchStudents = async () => {
-    resetMessages()
+    setErrorMessage('')
     try {
       setLoadingStudents(true)
-      const response = await axios.get<Student[]>(
-        `${API_BASE_URL}/api/students`,
-        {
-          timeout: 10000,
-        },
-      )
+      const response = await axios.get<Student[]>(`${API_BASE_URL}/api/students`, { timeout: 15000 })
       setStudents(response.data)
-    } catch (_error) {
-      setErrorMessage('Failed to load students. Please try again.')
+    } catch (error) {
+      setErrorMessage('Failed to load data. Check backend.')
     } finally {
       setLoadingStudents(false)
     }
   }
 
-  const handleSwitchView = (view: 'form' | 'dashboard') => {
-    setActiveView(view)
-    if (view === 'dashboard') {
-      fetchStudents()
-    }
-  }
-
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setIsAuthenticated(true)
-    setShowLoginModal(false)
-    setLoginEmail('')
-    setLoginPassword('')
-    setSuccessMessage('Logged in successfully. You can now submit the form.')
-  }
+    setSuccessMessage('')
+    setErrorMessage('')
 
-  const handleLogout = () => {
-    setIsAuthenticated(false)
-    resetMessages()
-  }
-
-  const openPhotoModal = (url: string) => {
-    setPhotoModalUrl(url)
-    setPhotoLoading(true)
-  }
-
-  const closePhotoModal = () => {
-    setPhotoModalUrl(null)
-    setPhotoLoading(false)
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    resetMessages()
-
-    if (!isAuthenticated) {
-      setErrorMessage('Please login before submitting the application.')
-      return
-    }
-
-    if (!form.graduationPhoto) {
-      setErrorMessage('Please upload your graduation photo before submitting.')
-      return
-    }
+    if (!isAuthenticated) return setErrorMessage('Please login first.')
+    if (!form.graduationPhoto) return setErrorMessage('Upload photo.')
 
     try {
       setSubmitting(true)
-
       const data = new FormData()
+      
+      // Har field ko manually append kar rahe hain taake koi data miss na ho
       data.append('fullName', form.fullName)
       data.append('email', form.email)
       data.append('contactNo', form.contactNo)
@@ -147,693 +96,208 @@ export function App() {
       data.append('workingPlan', form.workingPlan)
       data.append('graduationPhoto', form.graduationPhoto)
 
-      await axios.post(`${API_BASE_URL}/api/submit`, data, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        timeout: 10000,
-      })
-
-      setSuccessMessage('Application submitted successfully!')
+      const response = await axios.post(`${API_BASE_URL}/api/submit`, data)
+      console.log("Success:", response.data)
+      
+      setSuccessMessage('Application Submitted Successfully!')
       setForm(initialFormState)
-      const fileInput = document.getElementById(
-        'graduationPhoto',
-      ) as HTMLInputElement | null
-      if (fileInput) {
-        fileInput.value = ''
-      }
-    } catch (error: unknown) {
-      if (axios.isAxiosError(error)) {
-        if (error.code === 'ECONNABORTED') {
-          setErrorMessage('Request timed out. Please try again.')
-        } else if (error.response) {
-          setErrorMessage(
-            error.response.data?.message ??
-              'Server responded with an error. Please try again.',
-          )
-        } else if (error.request) {
-          setErrorMessage(
-            'Unable to reach the server. Is the backend running on port 5000?',
-          )
-        } else {
-          setErrorMessage('An unexpected error occurred. Please try again.')
-        }
-      } else {
-        setErrorMessage('An unexpected error occurred. Please try again.')
-      }
+      
+      // Input file reset
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+      if (fileInput) fileInput.value = ''
+
+    } catch (err: any) {
+      console.error("Submission Error:", err.response?.data || err.message)
+      setErrorMessage(err.response?.data?.message || 'Error submitting form.')
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <div className="min-h-screen gradient-bg flex items-center justify-center px-4 py-10">
-      <div className="max-w-4xl w-full mx-auto">
-        <motion.div
-          className="card-glass rounded-3xl p-8 md:p-10"
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
-        >
-          <div className="flex flex-col gap-6 mb-8">
-            <div className="flex flex-col md:flex-row md:items-start gap-8">
-              <div className="flex-1">
-                <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-white">
-                  Student Application Portal
-                </h1>
-                <p className="mt-3 text-sm md:text-base text-slate-300 max-w-xl">
-                  Submit new applications or review all submitted students from a
-                  single dashboard.
-                </p>
-              </div>
-              <div className="flex flex-col items-stretch gap-3 text-sm text-slate-200">
-                <div className="flex items-center gap-3 bg-slate-900/60 border border-slate-800/70 px-4 py-3 rounded-2xl">
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-400 flex items-center justify-center text-xs font-semibold">
-                    New
-                  </div>
-                  <div>
-                    <p className="font-medium">Hiring for 2026 batch</p>
-                    <p className="text-slate-400 text-xs">
-                      Full-time & remote opportunities
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-3 bg-slate-900/60 border border-slate-800/70 px-4 py-2 rounded-2xl">
-                  <div className="text-xs text-slate-300">
-                    {isAuthenticated ? (
-                      <span>Signed in as student</span>
-                    ) : (
-                      <span>Please sign in to fill the form</span>
-                    )}
-                  </div>
-                  {isAuthenticated ? (
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="inline-flex items-center rounded-full bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700"
-                    >
-                      Logout
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setShowLoginModal(true)}
-                      className="inline-flex items-center rounded-full bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-500"
-                    >
-                      Login / Sign up
-                    </button>
-                  )}
-                </div>
-              </div>
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 font-sans text-slate-200">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }} 
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-slate-900 border border-slate-800 p-8 rounded-3xl w-full max-w-4xl shadow-2xl"
+      >
+        {/* Header & View Switcher */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+            <div>
+                <h1 className="text-2xl font-bold text-white">Student Portal</h1>
+                <p className="text-slate-500 text-sm">Manage your applications easily</p>
+            </div>
+            <div className="flex gap-2 bg-slate-800/50 p-1.5 rounded-2xl border border-slate-700/50">
+                <button 
+                    onClick={() => setActiveView('form')}
+                    className={`px-6 py-2 rounded-xl text-sm font-semibold transition-all ${activeView === 'form' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                >
+                    Application Form
+                </button>
+                <button 
+                    onClick={() => { setActiveView('dashboard'); fetchStudents(); }}
+                    className={`px-6 py-2 rounded-xl text-sm font-semibold transition-all ${activeView === 'dashboard' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                >
+                    Dashboard
+                </button>
+            </div>
+        </div>
+
+        <hr className="border-slate-800 mb-8" />
+
+        {activeView === 'form' ? (
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-5 relative">
+            <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-slate-500 ml-1">Full Name</label>
+                <input name="fullName" placeholder="Enter full name" onChange={handleChange} value={form.fullName} className="bg-slate-800/50 border border-slate-700 p-3 rounded-xl text-white outline-none focus:ring-2 focus:ring-blue-600 transition-all placeholder:text-slate-600" required />
             </div>
 
-            <div className="inline-flex items-center rounded-2xl bg-slate-900/70 p-1 border border-slate-800/80">
-              <button
-                type="button"
-                onClick={() => handleSwitchView('form')}
-                className={`px-4 py-2 text-xs md:text-sm font-medium rounded-xl transition-all ${
-                  activeView === 'form'
-                    ? 'bg-slate-800 text-white shadow-soft'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                Application Form
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSwitchView('dashboard')}
-                className={`px-4 py-2 text-xs md:text-sm font-medium rounded-xl transition-all ${
-                  activeView === 'dashboard'
-                    ? 'bg-slate-800 text-white shadow-soft'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                Students Dashboard
-              </button>
-            </div>
-          </div>
-
-          {activeView === 'form' && (
-            <form
-              onSubmit={handleSubmit}
-              className="relative grid grid-cols-1 md:grid-cols-2 gap-6"
-            >
-            <div className="space-y-6 md:col-span-2 lg:col-span-1">
-              <div className="space-y-2">
-                <label
-                  htmlFor="fullName"
-                  className="block text-sm font-medium text-slate-200"
-                >
-                  Full Name
-                </label>
-                <input
-                  id="fullName"
-                  name="fullName"
-                  type="text"
-                  required
-                  autoComplete="name"
-                  placeholder="e.g. Sara Ahmed"
-                  value={form.fullName}
-                  onChange={handleChange}
-                  className="w-full rounded-xl border border-slate-700/70 bg-slate-900/60 px-4 py-2.5 text-sm text-slate-50 outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-500"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label
-                  htmlFor="email"
-                  className="block text-sm font-medium text-slate-200"
-                >
-                  Email
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                  value={form.email}
-                  onChange={handleChange}
-                  className="w-full rounded-xl border border-slate-700/70 bg-slate-900/60 px-4 py-2.5 text-sm text-slate-50 outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-500"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label
-                  htmlFor="contactNo"
-                  className="block text-sm font-medium text-slate-200"
-                >
-                  Contact No
-                </label>
-                <input
-                  id="contactNo"
-                  name="contactNo"
-                  type="tel"
-                  required
-                  placeholder="+92 300 0000000"
-                  value={form.contactNo}
-                  onChange={handleChange}
-                  className="w-full rounded-xl border border-slate-700/70 bg-slate-900/60 px-4 py-2.5 text-sm text-slate-50 outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-500"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label
-                  htmlFor="expectedSalary"
-                  className="block text-sm font-medium text-slate-200"
-                >
-                  Expected Salary (Monthly)
-                </label>
-                <input
-                  id="expectedSalary"
-                  name="expectedSalary"
-                  type="number"
-                  min={0}
-                  required
-                  placeholder="e.g. 80000"
-                  value={form.expectedSalary}
-                  onChange={handleChange}
-                  className="w-full rounded-xl border border-slate-700/70 bg-slate-900/60 px-4 py-2.5 text-sm text-slate-50 outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-500"
-                />
-              </div>
+            <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-slate-500 ml-1">Email Address</label>
+                <input name="email" type="email" placeholder="email@example.com" onChange={handleChange} value={form.email} className="bg-slate-800/50 border border-slate-700 p-3 rounded-xl text-white outline-none focus:ring-2 focus:ring-blue-600 transition-all placeholder:text-slate-600" required />
             </div>
 
-            <div className="space-y-6 md:col-span-2 lg:col-span-1">
-              <div className="space-y-2">
-                <label
-                  htmlFor="graduation"
-                  className="block text-sm font-medium text-slate-200"
-                >
-                  Graduation
-                </label>
-                <select
-                  id="graduation"
-                  name="graduation"
-                  required
-                  value={form.graduation}
-                  onChange={handleChange}
-                  className="w-full rounded-xl border border-slate-700/70 bg-slate-900/60 px-4 py-2.5 text-sm text-slate-50 outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                >
-                  <option value="" disabled>
-                    Select your degree
-                  </option>
-                  <option value="BCS">BCS</option>
-                  <option value="BSCS">BSCS</option>
-                  <option value="BSE">BSE</option>
-                  <option value="MCS">MCS</option>
-                  <option value="MSCS">MSCS</option>
-                  <option value="Other">Other</option>
+            <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-slate-500 ml-1">Contact Number</label>
+                <input name="contactNo" placeholder="03XXXXXXXXX" onChange={handleChange} value={form.contactNo} className="bg-slate-800/50 border border-slate-700 p-3 rounded-xl text-white outline-none focus:ring-2 focus:ring-blue-600 transition-all placeholder:text-slate-600" required />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-slate-500 ml-1">Expected Salary</label>
+                <input name="expectedSalary" type="number" placeholder="e.g. 50000" onChange={handleChange} value={form.expectedSalary} className="bg-slate-800/50 border border-slate-700 p-3 rounded-xl text-white outline-none focus:ring-2 focus:ring-blue-600 transition-all placeholder:text-slate-600" required />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-slate-500 ml-1">Graduation / Degree</label>
+                <input name="graduation" placeholder="e.g. BSCS or Matric" onChange={handleChange} value={form.graduation} className="bg-slate-800/50 border border-slate-700 p-3 rounded-xl text-white outline-none focus:ring-2 focus:ring-blue-600 transition-all placeholder:text-slate-600" required />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-slate-500 ml-1">Working Plan</label>
+                <select name="workingPlan" onChange={handleChange} value={form.workingPlan} className="bg-slate-800/50 border border-slate-700 p-3 rounded-xl text-white outline-none focus:ring-2 focus:ring-blue-600 transition-all appearance-none cursor-pointer" required>
+                    <option value="" className="bg-slate-900">Select Plan</option>
+                    <option value="Full-Time" className="bg-slate-900">Full-Time</option>
+                    <option value="Remote" className="bg-slate-900">Remote</option>
                 </select>
-              </div>
-
-              <div className="space-y-2">
-                <span className="block text-sm font-medium text-slate-200">
-                  Working Plan
-                </span>
-                <div className="grid grid-cols-2 gap-3">
-                  {(['Full-Time', 'Remote'] as WorkingPlan[]).map(option => {
-                    const isActive = form.workingPlan === option
-                    return (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() =>
-                          setForm(prev => ({ ...prev, workingPlan: option }))
-                        }
-                        className={`flex items-center justify-center rounded-xl border px-3 py-2.5 text-sm font-medium transition-all ${
-                          isActive
-                            ? 'border-primary-500 bg-primary-500/10 text-primary-100 shadow-soft'
-                            : 'border-slate-700/70 bg-slate-900/60 text-slate-300 hover:border-primary-500/60 hover:bg-slate-900/80'
-                        }`}
-                      >
-                        {option}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label
-                  htmlFor="graduationPhoto"
-                  className="block text-sm font-medium text-slate-200"
-                >
-                  Graduation Photo
-                </label>
-                <div className="relative flex items-center gap-3 rounded-xl border border-dashed border-slate-700/80 bg-slate-900/40 px-4 py-3">
-                  <input
-                    id="graduationPhoto"
-                    name="graduationPhoto"
-                    type="file"
-                    accept="image/*"
-                    required
-                    onChange={handleFileChange}
-                    className="block w-full text-xs text-slate-300 file:mr-4 file:rounded-lg file:border-0 file:bg-primary-600 file:px-3 file:py-2 file:text-xs file:font-medium file:text-white hover:file:bg-primary-500 cursor-pointer"
-                  />
-                </div>
-                <p className="text-xs text-slate-400">
-                  Upload a clear, recent graduation photo (max ~5MB recommended).
-                </p>
-              </div>
             </div>
-
-            <div className="md:col-span-2 flex flex-col gap-4 mt-2">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <p className="text-xs text-slate-400">
-                  By submitting this form you agree to our data usage policy. We
-                  only use your information for recruitment and evaluation
-                  purposes.
-                </p>
-                <motion.button
-                  type="submit"
-                  disabled={submitting}
-                  whileHover={{ scale: submitting ? 1 : 1.02 }}
-                  whileTap={{ scale: submitting ? 1 : 0.98 }}
-                  className="inline-flex items-center justify-center rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-medium text-white shadow-soft hover:bg-primary-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:opacity-80"
-                >
-                  <span className="relative inline-flex items-center gap-2">
-                    <span>{submitting ? 'Submitting' : 'Submit Application'}</span>
-                  </span>
-                </motion.button>
-              </div>
-
-              <AnimatePresence>
-                {submitting && (
-                  <motion.div
-                    className="flex items-center gap-3 text-sm text-primary-100 bg-slate-900/70 border border-slate-700/80 rounded-xl px-4 py-3"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                  >
-                    <motion.div
-                      className="relative h-8 w-8"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                    >
-                      <motion.div
-                        className="absolute inset-0 rounded-full border-2 border-primary-500/40 border-t-primary-400"
-                        animate={{ rotate: 360 }}
-                        transition={{
-                          repeat: Infinity,
-                          duration: 0.8,
-                          ease: 'linear',
-                        }}
-                      />
-                      <motion.div
-                        className="absolute inset-2 rounded-full bg-primary-500/80"
-                        animate={{
-                          scale: [1, 1.1, 1],
-                          opacity: [0.9, 1, 0.9],
-                        }}
-                        transition={{
-                          repeat: Infinity,
-                          duration: 1.2,
-                          ease: 'easeInOut',
-                        }}
-                      />
-                    </motion.div>
-                    <div>
-                      <p className="font-medium leading-tight">
-                        Submitting your application
-                      </p>
-                      <p className="text-xs text-primary-100/80">
-                        Please wait a moment while we securely upload your details
-                        and photo.
-                      </p>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <AnimatePresence>
-                {successMessage && (
-                  <motion.div
-                    className="flex items-center gap-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                  >
-                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/80 text-xs font-semibold">
-                      ✓
-                    </span>
-                    <p>{successMessage}</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <AnimatePresence>
-                {errorMessage && (
-                  <motion.div
-                    className="flex items-center gap-3 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                  >
-                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-rose-500/80 text-xs font-semibold">
-                      !
-                    </span>
-                    <p>{errorMessage}</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-              {!isAuthenticated && (
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-md px-6 text-center">
-                  <h2 className="text-lg font-semibold text-white mb-2">
-                    Login required
-                  </h2>
-                  <p className="text-xs md:text-sm text-slate-300 mb-4 max-w-sm">
-                    Please login or sign up before filling and submitting the
-                    student application form.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setShowLoginModal(true)}
-                    className="inline-flex items-center rounded-full bg-primary-600 px-4 py-2 text-xs font-medium text-white hover:bg-primary-500"
-                  >
-                    Login / Sign up
-                  </button>
+            
+            <div className="flex flex-col gap-1.5 md:col-span-2">
+                <label className="text-xs font-medium text-slate-500 ml-1">Graduation Photo / Certificate</label>
+                <div className="bg-slate-800/30 border-2 border-dashed border-slate-700 p-4 rounded-xl hover:border-blue-500/50 transition-colors">
+                    <input name="graduationPhoto" type="file" onChange={handleFileChange} className="text-slate-400 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-600 file:text-white file:font-bold file:cursor-pointer" required />
                 </div>
-              )}
             </div>
-          </form>
-          )}
-
-          {activeView === 'dashboard' && (
-            <div className="mt-2 space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs md:text-sm text-slate-300">
-                  Review all submitted student applications. Click on "View photo"
-                  to open each graduation image.
-                </p>
-                <button
-                  type="button"
-                  onClick={fetchStudents}
-                  className="inline-flex items-center rounded-xl border border-slate-700/80 bg-slate-900/60 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-primary-500/70 hover:text-white"
-                >
-                  Refresh list
-                </button>
-              </div>
-
-              {loadingStudents ? (
-                <div className="flex items-center gap-3 text-sm text-primary-100 bg-slate-900/70 border border-slate-700/80 rounded-xl px-4 py-3">
-                  <motion.div
-                    className="relative h-7 w-7"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                  >
-                    <motion.div
-                      className="absolute inset-0 rounded-full border-2 border-primary-500/40 border-t-primary-400"
-                      animate={{ rotate: 360 }}
-                      transition={{
-                        repeat: Infinity,
-                        duration: 0.8,
-                        ease: 'linear',
-                      }}
-                    />
-                  </motion.div>
-                  <p>Loading students...</p>
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 overflow-hidden">
-                  <div className="max-h-96 overflow-auto">
-                    <table className="min-w-full text-xs md:text-sm">
-                      <thead className="bg-slate-900/80">
-                        <tr className="text-left text-slate-300">
-                          <th className="px-4 py-3 font-medium">#</th>
-                          <th className="px-4 py-3 font-medium">Name</th>
-                          <th className="px-4 py-3 font-medium hidden md:table-cell">
-                            Email
-                          </th>
-                          <th className="px-4 py-3 font-medium hidden md:table-cell">
-                            Contact
-                          </th>
-                          <th className="px-4 py-3 font-medium">Graduation</th>
-                          <th className="px-4 py-3 font-medium">Plan</th>
-                          <th className="px-4 py-3 font-medium text-right">
-                            Photo
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {students.length === 0 ? (
-                          <tr>
-                            <td
-                              colSpan={7}
-                              className="px-4 py-6 text-center text-slate-400"
-                            >
-                              No applications found yet.
-                            </td>
-                          </tr>
-                        ) : (
-                          students.map((student, index) => (
-                            <tr
-                              key={student._id}
-                              className="border-t border-slate-800/70 text-slate-200"
-                            >
-                              <td className="px-4 py-3 align-top">
-                                {index + 1}
-                              </td>
-                              <td className="px-4 py-3 align-top">
-                                <div className="font-medium">
-                                  {student.fullName}
-                                </div>
-                                <div className="md:hidden text-xs text-slate-400">
-                                  {student.email}
-                                </div>
-                                <div className="md:hidden text-xs text-slate-500">
-                                  {student.contactNo}
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 align-top hidden md:table-cell">
-                                <div className="text-xs md:text-sm">
-                                  {student.email}
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 align-top hidden md:table-cell">
-                                <div className="text-xs md:text-sm">
-                                  {student.contactNo}
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 align-top">
-                                <div className="text-xs md:text-sm">
-                                  {student.graduation}
-                                </div>
-                                <div className="text-[10px] text-slate-500 mt-1">
-                                  Expected: {student.expectedSalary}
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 align-top">
-                                <span className="inline-flex rounded-full bg-slate-800 px-2.5 py-1 text-[10px] font-medium text-slate-100">
-                                  {student.workingPlan}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 align-top text-right">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    openPhotoModal(
-                                      `${API_BASE_URL}${student.photoPath}`,
-                                    )
-                                  }
-                                  className="inline-flex items-center rounded-full bg-primary-600/90 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-primary-500"
-                                >
-                                  View photo
-                                </button>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </motion.div>
-      </div>
-
-      <AnimatePresence>
-        {showLoginModal && (
-          <motion.div
-            className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 backdrop-blur"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.div
-              className="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-800 shadow-soft px-6 py-6"
-              initial={{ scale: 0.9, opacity: 0, y: 12 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 12 }}
+            
+            <button 
+                type="submit" 
+                disabled={submitting} 
+                className="md:col-span-2 bg-blue-600 hover:bg-blue-500 py-4 rounded-xl text-white font-bold transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed mt-2"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-white">
-                    Student login
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Simple demo login – no real account required.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowLoginModal(false)}
-                  className="text-slate-500 hover:text-slate-200 text-lg leading-none"
-                >
-                  ×
-                </button>
-              </div>
-              <form onSubmit={handleLoginSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <label
-                    htmlFor="loginEmail"
-                    className="block text-xs font-medium text-slate-200"
-                  >
-                    Email
-                  </label>
-                  <input
-                    id="loginEmail"
-                    type="email"
-                    required
-                    value={loginEmail}
-                    onChange={e => setLoginEmail(e.target.value)}
-                    placeholder="student@example.com"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-xs text-slate-50 outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-500"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label
-                    htmlFor="loginPassword"
-                    className="block text-xs font-medium text-slate-200"
-                  >
-                    Password
-                  </label>
-                  <input
-                    id="loginPassword"
-                    type="password"
-                    required
-                    value={loginPassword}
-                    onChange={e => setLoginPassword(e.target.value)}
-                    placeholder="Enter any demo password"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-xs text-slate-50 outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-slate-500"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="w-full inline-flex items-center justify-center rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-500"
-                >
-                  Login
-                </button>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              {submitting ? (
+                <span className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Processing...
+                </span>
+              ) : 'Submit Application'}
+            </button>
 
+            {!isAuthenticated && (
+              <div className="absolute -inset-2 bg-slate-950/60 backdrop-blur-[6px] flex flex-col items-center justify-center rounded-3xl z-10 border border-white/5">
+                <motion.div initial={{scale:0.9}} animate={{scale:1}} className="bg-slate-900 p-8 rounded-2xl border border-slate-700 shadow-2xl text-center max-w-xs">
+                    <h3 className="text-xl font-bold mb-2">Welcome Back!</h3>
+                    <p className="text-slate-400 text-sm mb-6">Please sign in to your demo account to start submitting applications.</p>
+                    <button type="button" onClick={() => setIsAuthenticated(true)} className="w-full bg-white text-black px-6 py-3 rounded-xl font-bold hover:bg-slate-200 transition-colors">
+                        Demo Login
+                    </button>
+                </motion.div>
+              </div>
+            )}
+          </form>
+        ) : (
+          <div className="text-white">
+            {loadingStudents ? (
+               <div className="flex flex-col items-center justify-center py-20 gap-4">
+                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+                 <p className="text-slate-500 animate-pulse">Fetching records...</p>
+               </div>
+            ) : students.length === 0 ? (
+                <div className="text-center py-20 text-slate-500">
+                    <p>No records found. Submit your first application!</p>
+                </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-slate-800">
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                        <tr className="bg-slate-800/30 text-slate-400 text-xs uppercase tracking-wider">
+                            <th className="p-4 font-semibold">Student Name</th>
+                            <th className="p-4 font-semibold">Graduation</th>
+                            <th className="p-4 font-semibold">Plan</th>
+                            <th className="p-4 font-semibold text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                    {students.map(s => (
+                        <tr key={s._id} className="hover:bg-slate-800/20 transition-colors group">
+                        <td className="p-4">
+                            <div className="font-medium text-slate-200">{s.fullName}</div>
+                            <div className="text-xs text-slate-500">{s.email}</div>
+                        </td>
+                        <td className="p-4 text-sm">{s.graduation}</td>
+                        <td className="p-4">
+                            <span className={`text-[10px] px-2 py-1 rounded-md font-bold ${s.workingPlan === 'Remote' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'}`}>
+                                {s.workingPlan}
+                            </span>
+                        </td>
+                        <td className="p-4 text-right">
+                            <button 
+                                onClick={() => setPhotoModalUrl(`${API_BASE_URL}${s.photoPath}`)}
+                                className="bg-slate-800 hover:bg-blue-600 p-2 px-4 rounded-lg text-xs transition-all border border-slate-700"
+                            >
+                                View Photo
+                            </button>
+                        </td>
+                        </tr>
+                    ))}
+                    </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+        
+        <AnimatePresence>
+            {successMessage && (
+                <motion.div initial={{opacity:0, height:0}} animate={{opacity:1, height:'auto'}} exit={{opacity:0}} className="mt-6 bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                    <p className="text-emerald-500 text-sm font-medium">{successMessage}</p>
+                </motion.div>
+            )}
+            {errorMessage && (
+                <motion.div initial={{opacity:0, height:0}} animate={{opacity:1, height:'auto'}} exit={{opacity:0}} className="mt-6 bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
+                    <p className="text-rose-500 text-sm font-medium">{errorMessage}</p>
+                </motion.div>
+            )}
+        </AnimatePresence>
+      </motion.div>
+
+      {/* Image Modal Preview */}
       <AnimatePresence>
         {photoModalUrl && (
-          <motion.div
-            className="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/80 backdrop-blur"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
             exit={{ opacity: 0 }}
+            onClick={() => setPhotoModalUrl(null)}
+            className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4 cursor-zoom-out"
           >
-            <button
-              type="button"
-              onClick={closePhotoModal}
-              className="absolute top-4 right-4 rounded-full bg-slate-900/80 border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-800"
+            <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }} 
+                animate={{ scale: 1, opacity: 1 }}
+                className="relative max-w-5xl w-full flex justify-center"
             >
-              Close
-            </button>
-            <motion.div
-              className="max-w-3xl max-h-[80vh] w-full flex items-center justify-center"
-              initial={{ scale: 0.95, opacity: 0, y: 10 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 10 }}
-            >
-              <div className="relative w-full h-full flex items-center justify-center">
-                {photoLoading && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <motion.div
-                      className="relative h-14 w-14"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                    >
-                      <motion.div
-                        className="absolute inset-0 rounded-full border-2 border-primary-500/40 border-t-primary-400"
-                        animate={{ rotate: 360 }}
-                        transition={{
-                          repeat: Infinity,
-                          duration: 0.8,
-                          ease: 'linear',
-                        }}
-                      />
-                      <motion.div
-                        className="absolute inset-2 rounded-full bg-primary-500/80"
-                        animate={{
-                          scale: [1, 1.1, 1],
-                          opacity: [0.9, 1, 0.9],
-                        }}
-                        transition={{
-                          repeat: Infinity,
-                          duration: 1.2,
-                          ease: 'easeInOut',
-                        }}
-                      />
-                    </motion.div>
-                  </div>
-                )}
-                <img
-                  src={photoModalUrl}
-                  alt="Graduation photo"
-                  onLoad={() => setPhotoLoading(false)}
-                  className={`max-h-[80vh] max-w-full rounded-2xl shadow-soft border border-slate-800 object-contain transition-opacity ${
-                    photoLoading ? 'opacity-0' : 'opacity-100'
-                  }`}
-                />
-              </div>
+                <img src={photoModalUrl} alt="Preview" className="max-h-[85vh] rounded-xl shadow-2xl border border-white/10" />
+                <button className="absolute top-[-40px] right-0 text-white hover:text-blue-400 font-bold">Close Preview [×]</button>
             </motion.div>
           </motion.div>
         )}
@@ -843,4 +307,3 @@ export function App() {
 }
 
 export default App
-
