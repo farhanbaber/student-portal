@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-950 text-slate-50 antialiased;
+}
+
+.gradient-bg {
+  background: radial-gradient(circle at top left, #1d4ed8, transparent 55%),
+    radial-gradient(circle at bottom right, #a855f7, transparent 55%);
+}
+
+.card-glass {
+  @apply bg-slate-900/70 backdrop-blur-xl border border-slate-800/60 shadow-soft;
+}
