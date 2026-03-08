@@ -37,10 +37,11 @@ function App() {
   const [students, setStudents] = useState<Student[]>([])
   const [loadingStudents, setLoadingStudents] = useState(false)
   
-  // States for the Luxurious Admin Auth
+  // States for the Luxurious Admin Auth & Modals
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [showAdminLogin, setShowAdminLogin] = useState(false)
   const [adminPass, setAdminPass] = useState('')
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
   const [photoModalUrl, setPhotoModalUrl] = useState<string | null>(null)
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -65,7 +66,6 @@ function App() {
     }
   }
 
-  // Luxurious Auth Handler
   const handleAdminVerify = () => {
     if (adminPass === 'farhan123') {
       setIsAuthenticated(true)
@@ -90,7 +90,7 @@ function App() {
       })
 
       await axios.post(`${API_BASE_URL}/api/submit`, data)
-      setSuccessMessage('Application Submitted Successfully! ✅')
+      setSuccessMessage('Application Submitted Successfully!')
       setForm({ fullName: '', email: '', contactNo: '', expectedSalary: '', graduation: '', workingPlan: '', graduationPhoto: null })
     } catch (err: any) {
       setErrorMessage('Error submitting application.')
@@ -200,7 +200,7 @@ function App() {
                       layout key={s._id} 
                       className="bg-slate-900/60 border border-slate-800 p-5 rounded-[2rem] flex flex-col md:flex-row justify-between items-center gap-4 hover:border-blue-500/30 transition-all"
                     >
-                      <div className="flex flex-col md:flex-row items-center gap-4 text-center md:text-left">
+                      <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-black text-xl">
                           {s.fullName[0]}
                         </div>
@@ -209,18 +209,12 @@ function App() {
                           <p className="text-xs text-slate-500">{s.email}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-6">
-                        <div className="text-right hidden md:block">
-                          <p className="text-[10px] text-slate-500 uppercase font-black">Plan</p>
-                          <p className="text-sm font-bold text-blue-400">{s.workingPlan}</p>
-                        </div>
-                        <button 
-                          onClick={() => setPhotoModalUrl(`${API_BASE_URL}${s.photoPath}`)}
-                          className="bg-white text-black px-6 py-2.5 rounded-xl text-[10px] font-black uppercase hover:bg-blue-400 transition-all"
-                        >
-                          View Photo
-                        </button>
-                      </div>
+                      <button 
+                        onClick={() => setSelectedStudent(s)}
+                        className="bg-white text-black px-8 py-3 rounded-xl text-[10px] font-black uppercase hover:bg-blue-400 transition-all shadow-xl active:scale-95"
+                      >
+                        View Details
+                      </button>
                     </motion.div>
                   ))}
                 </div>
@@ -230,8 +224,9 @@ function App() {
         </AnimatePresence>
       </main>
 
-      {/* --- LUXURIOUS ADMIN LOGIN OVERLAY --- */}
+      {/* --- MODALS SECTION --- */}
       <AnimatePresence>
+        {/* 1. Admin Login Overlay */}
         {showAdminLogin && (
           <motion.div 
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -241,16 +236,12 @@ function App() {
               initial={{ scale: 0.9, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 30 }}
               className="bg-slate-900 border border-white/10 p-10 rounded-[3rem] shadow-[0_0_100px_rgba(37,99,235,0.15)] max-w-sm w-full text-center relative overflow-hidden"
             >
-              <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-600/20 blur-[60px] rounded-full" />
-              <h2 className="text-3xl font-black text-white mb-2 tracking-tighter">ADMIN</h2>
-              <p className="text-slate-500 text-xs mb-8 font-medium">Verify your identity to proceed</p>
-              
+              <h2 className="text-3xl font-black text-white mb-2">ADMIN</h2>
               <input 
                 type="password" placeholder="••••••••" 
                 value={adminPass} onChange={(e) => setAdminPass(e.target.value)}
                 className="w-full bg-black/40 border border-white/5 p-4 rounded-2xl text-center text-white outline-none focus:ring-2 focus:ring-blue-500/50 mb-6 transition-all"
               />
-
               <div className="flex gap-3">
                 <button onClick={() => setShowAdminLogin(false)} className="flex-1 text-slate-500 text-[10px] font-black uppercase tracking-widest">Back</button>
                 <button onClick={handleAdminVerify} className="flex-[2] bg-blue-600 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-600/20">Authorize</button>
@@ -258,33 +249,97 @@ function App() {
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
 
-      {/* --- Success/Error Toasts --- */}
-      <AnimatePresence>
-        {(successMessage || errorMessage) && (
+        {/* 2. Professional Details Modal */}
+        {selectedStudent && (
           <motion.div 
-            initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }}
-            className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl ${successMessage ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] bg-slate-950/95 backdrop-blur-3xl flex items-center justify-center p-4"
           >
-            {successMessage || errorMessage}
-            <button onClick={() => {setSuccessMessage(''); setErrorMessage('')}} className="ml-4 opacity-50">×</button>
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+              className="bg-slate-900 border border-white/10 w-full max-w-lg rounded-[3rem] overflow-hidden shadow-2xl"
+            >
+              <div className="bg-gradient-to-br from-blue-600 to-indigo-800 p-10 flex flex-col items-center gap-6 text-center">
+                <img 
+                  src={`${API_BASE_URL}${selectedStudent.photoPath}`} 
+                  className="w-28 h-28 rounded-3xl object-cover border-4 border-white/20 shadow-2xl cursor-pointer hover:scale-105 transition-all" 
+                  alt="Profile"
+                  onClick={() => setPhotoModalUrl(`${API_BASE_URL}${selectedStudent.photoPath}`)}
+                />
+                <div>
+                  <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-1">{selectedStudent.fullName}</h2>
+                  <p className="text-blue-100 text-sm opacity-70">{selectedStudent.email}</p>
+                </div>
+              </div>
+              <div className="p-10 grid grid-cols-2 gap-8 bg-slate-900">
+                {[
+                  { label: 'Contact', value: selectedStudent.contactNo },
+                  { label: 'Graduation', value: selectedStudent.graduation },
+                  { label: 'Expected Salary', value: `Rs. ${selectedStudent.expectedSalary}` },
+                  { label: 'Work Plan', value: selectedStudent.workingPlan },
+                ].map((item, i) => (
+                  <div key={i} className="flex flex-col gap-1">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{item.label}</span>
+                    <span className="text-slate-200 font-bold text-lg">{item.value}</span>
+                  </div>
+                ))}
+                <div className="col-span-2 pt-4">
+                   <button 
+                    onClick={() => setSelectedStudent(null)}
+                    className="w-full bg-white/5 hover:bg-white/10 border border-white/10 py-5 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] transition-all"
+                  >
+                    Close Details
+                  </button>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
 
-      {/* --- Image Modal --- */}
-      <AnimatePresence>
+        {/* 3. Success Green Glassmorphic Overlay */}
+        {successMessage && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/70 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.8, y: 20 }} animate={{ scale: 1, y: 0 }}
+              className="bg-emerald-950/40 border border-emerald-500/30 backdrop-blur-2xl p-12 rounded-[3rem] text-center max-w-sm w-full shadow-2xl"
+            >
+              <div className="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-xl shadow-emerald-500/40">
+                <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7"></path></svg>
+              </div>
+              <h3 className="text-3xl font-black text-white mb-3 tracking-tight uppercase">SUCCESS!</h3>
+              <p className="text-emerald-200/70 text-sm mb-10 font-bold leading-relaxed">Your application has been received successfully.</p>
+              <button 
+                onClick={() => setSuccessMessage('')}
+                className="w-full bg-emerald-500 hover:bg-emerald-400 py-5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-emerald-950 transition-all shadow-xl"
+              >
+                Continue
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* 4. Error Message Overlay */}
+        {errorMessage && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+            <div className="bg-rose-950/40 border border-rose-500/30 backdrop-blur-2xl p-10 rounded-[2.5rem] text-center max-w-sm w-full">
+              <p className="text-rose-200 font-black mb-6 uppercase tracking-widest">{errorMessage}</p>
+              <button onClick={() => setErrorMessage('')} className="bg-rose-500 px-10 py-3 rounded-xl text-xs font-black uppercase text-white">Retry</button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* 5. Image Preview Modal */}
         {photoModalUrl && (
           <motion.div 
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
             onClick={() => setPhotoModalUrl(null)}
-            className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-4 backdrop-blur-xl cursor-zoom-out"
+            className="fixed inset-0 bg-black/98 z-[250] flex items-center justify-center p-4 backdrop-blur-3xl cursor-zoom-out"
           >
-            <motion.img 
-              initial={{ scale: 0.8 }} animate={{ scale: 1 }} 
-              src={photoModalUrl} className="max-h-[85vh] rounded-[2rem] shadow-2xl border border-white/10" 
-            />
+            <motion.img initial={{ scale: 0.8 }} animate={{ scale: 1 }} src={photoModalUrl} className="max-h-[85vh] rounded-[2.5rem] shadow-2xl border border-white/10" />
           </motion.div>
         )}
       </AnimatePresence>
