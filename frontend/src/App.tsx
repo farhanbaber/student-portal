@@ -5,16 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 // --- Types & Interfaces ---
 type WorkingPlan = 'Full-Time' | 'Remote'
 
-interface FormState {
-  fullName: string
-  email: string
-  contactNo: string
-  expectedSalary: string
-  graduation: string
-  workingPlan: WorkingPlan | ''
-  graduationPhoto: File | null
-}
-
 interface Student {
   _id: string
   fullName: string
@@ -27,285 +17,274 @@ interface Student {
   createdAt: string
 }
 
-const initialFormState: FormState = {
-  fullName: '',
-  email: '',
-  contactNo: '',
-  expectedSalary: '',
-  graduation: '',
-  workingPlan: '',
-  graduationPhoto: null,
-}
-
 const API_BASE_URL = 'https://student-portal-production-a736.up.railway.app'
 
 function App() {
-  const [form, setForm] = useState<FormState>(initialFormState)
-  const [submitting, setSubmitting] = useState<boolean>(false)
-  const [successMessage, setSuccessMessage] = useState<string>('')
-  const [errorMessage, setErrorMessage] = useState<string>('')
+  const [form, setForm] = useState({
+    fullName: '',
+    email: '',
+    contactNo: '',
+    expectedSalary: '',
+    graduation: '',
+    workingPlan: '',
+    graduationPhoto: null as File | null,
+  })
+
+  const [submitting, setSubmitting] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
   const [activeView, setActiveView] = useState<'form' | 'dashboard'>('form')
   const [students, setStudents] = useState<Student[]>([])
-  const [loadingStudents, setLoadingStudents] = useState<boolean>(false)
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
+  const [loadingStudents, setLoadingStudents] = useState(false)
+  
+  // States for the Luxurious Admin Auth
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [showAdminLogin, setShowAdminLogin] = useState(false)
+  const [adminPass, setAdminPass] = useState('')
   const [photoModalUrl, setPhotoModalUrl] = useState<string | null>(null)
 
-  // Handlers
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setForm(prev => ({ ...prev, [name]: value }))
   }
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] ?? null
-    setForm(prev => ({ ...prev, graduationPhoto: file }))
-  }
-
-  // Dashboard Privacy Logic
-  const handleDashboardAccess = () => {
-    const password = prompt('Enter Admin Password to access Dashboard:');
-    if (password === 'farhan123') { // Aap password yahan badal sakte hain
-      setActiveView('dashboard');
-      fetchStudents();
-    } else {
-      alert('Wrong Password! Only Farhan can access this.');
-    }
+    setForm(prev => ({ ...prev, graduationPhoto: e.target.files?.[0] ?? null }))
   }
 
   const fetchStudents = async () => {
     setErrorMessage('')
     try {
       setLoadingStudents(true)
-      const response = await axios.get<Student[]>(`${API_BASE_URL}/api/students`, { timeout: 15000 })
+      const response = await axios.get<Student[]>(`${API_BASE_URL}/api/students`)
       setStudents(response.data)
     } catch (error) {
-      setErrorMessage('Failed to load data. Check backend.')
+      setErrorMessage('Failed to load records.')
     } finally {
       setLoadingStudents(false)
     }
   }
 
+  // Luxurious Auth Handler
+  const handleAdminVerify = () => {
+    if (adminPass === 'farhan123') {
+      setIsAuthenticated(true)
+      setShowAdminLogin(false)
+      setActiveView('dashboard')
+      fetchStudents()
+      setAdminPass('')
+    } else {
+      alert('Ghalat Password! Sirf Farhan access kar sakta hai.')
+    }
+  }
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setSuccessMessage('')
-    setErrorMessage('')
-
-    if (!isAuthenticated) return setErrorMessage('Please login first.')
-    if (!form.graduationPhoto) return setErrorMessage('Upload photo.')
-
+    if (!form.graduationPhoto) return setErrorMessage('Photo upload karein.')
+    
     try {
       setSubmitting(true)
       const data = new FormData()
-      data.append('fullName', form.fullName)
-      data.append('email', form.email)
-      data.append('contactNo', form.contactNo)
-      data.append('expectedSalary', form.expectedSalary)
-      data.append('graduation', form.graduation)
-      data.append('workingPlan', form.workingPlan)
-      data.append('graduationPhoto', form.graduationPhoto)
+      Object.entries(form).forEach(([key, value]) => {
+        if (value) data.append(key, value)
+      })
 
-      const response = await axios.post(`${API_BASE_URL}/api/submit`, data)
-      setSuccessMessage('Application Submitted Successfully!')
-      setForm(initialFormState)
-      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
-      if (fileInput) fileInput.value = ''
+      await axios.post(`${API_BASE_URL}/api/submit`, data)
+      setSuccessMessage('Application Submitted Successfully! ✅')
+      setForm({ fullName: '', email: '', contactNo: '', expectedSalary: '', graduation: '', workingPlan: '', graduationPhoto: null })
     } catch (err: any) {
-      setErrorMessage(err.response?.data?.message || 'Error submitting form.')
+      setErrorMessage('Error submitting application.')
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-[#020617] flex flex-col items-center p-4 font-sans text-slate-200">
+    <div className="min-h-screen bg-[#020617] text-slate-200 font-sans selection:bg-blue-500/30 overflow-x-hidden">
       
-      {/* 1. Glassmorphic Heading Section */}
-      <header className="sticky top-4 z-40 w-full max-w-4xl mb-8">
-        <div className="bg-slate-900/50 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] shadow-2xl flex flex-col md:flex-row justify-between items-center gap-4">
+      {/* --- Sticky Glass Header --- */}
+      <header className="sticky top-0 z-40 w-full px-4 pt-6 pb-2">
+        <motion.div 
+          initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+          className="max-w-4xl mx-auto bg-slate-900/60 backdrop-blur-xl border border-white/5 p-4 md:p-6 rounded-[2.5rem] shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6"
+        >
           <div className="text-center md:text-left">
-            <h1 className="text-3xl md:text-4xl font-black bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent animate-gradient-x">
+            <h1 className="text-2xl md:text-3xl font-black bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-500 bg-clip-text text-transparent animate-gradient-x tracking-tight">
               STUDENT PORTAL
             </h1>
-            <p className="text-slate-400 text-xs font-medium tracking-[0.2em] uppercase mt-1">Next-Gen Management System</p>
+            <p className="text-slate-500 text-[10px] font-bold tracking-[0.3em] uppercase">Premium Management</p>
           </div>
-          
-          <div className="flex gap-2 bg-black/20 p-1.5 rounded-2xl border border-white/5">
+
+          <div className="flex gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/5 w-full md:w-auto">
             <button 
-                onClick={() => setActiveView('form')}
-                className={`px-6 py-2 rounded-xl text-xs font-bold transition-all duration-300 ${activeView === 'form' ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]' : 'text-slate-500 hover:text-white'}`}
+              onClick={() => setActiveView('form')}
+              className={`flex-1 md:flex-none px-8 py-2.5 rounded-xl text-xs font-black transition-all duration-300 ${activeView === 'form' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-500 hover:text-white'}`}
             >
-                FORM
+              APPLY
             </button>
             <button 
-                onClick={handleDashboardAccess}
-                className={`px-6 py-2 rounded-xl text-xs font-bold transition-all duration-300 ${activeView === 'dashboard' ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]' : 'text-slate-500 hover:text-white'}`}
+              onClick={() => isAuthenticated ? (setActiveView('dashboard'), fetchStudents()) : setShowAdminLogin(true)}
+              className={`flex-1 md:flex-none px-8 py-2.5 rounded-xl text-xs font-black transition-all duration-500 transform hover:scale-105 active:scale-95 ${activeView === 'dashboard' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white hover:shadow-[0_0_15px_rgba(99,102,241,0.3)]'}`}
             >
-                DASHBOARD
+              DASHBOARD
             </button>
           </div>
-        </div>
+        </motion.div>
       </header>
 
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }} 
-        animate={{ opacity: 1, scale: 1 }}
-        className="bg-slate-900/80 border border-slate-800 p-6 md:p-10 rounded-[2.5rem] w-full max-w-4xl shadow-2xl backdrop-blur-sm"
-      >
-        {activeView === 'form' ? (
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
-             {/* Form Fields (Same as yours but with polished spacing) */}
-             <div className="flex flex-col gap-2">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 ml-1">Full Name</label>
-                <input name="fullName" placeholder="Enter full name" onChange={handleChange} value={form.fullName} className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all placeholder:text-slate-600" required />
-            </div>
+      <main className="max-w-4xl mx-auto p-4 md:p-10">
+        <AnimatePresence mode="wait">
+          {activeView === 'form' ? (
+            <motion.div 
+              key="form-view" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+              className="bg-slate-900/40 border border-slate-800 p-6 md:p-10 rounded-[3rem] backdrop-blur-sm shadow-2xl"
+            >
+              <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {[
+                  { label: 'Full Name', name: 'fullName', type: 'text', placeholder: 'Farhan Baber' },
+                  { label: 'Email Address', name: 'email', type: 'email', placeholder: 'farhan@example.com' },
+                  { label: 'Contact No', name: 'contactNo', type: 'text', placeholder: '03XXXXXXXXX' },
+                  { label: 'Expected Salary', name: 'expectedSalary', type: 'number', placeholder: '50000' },
+                  { label: 'Graduation', name: 'graduation', type: 'text', placeholder: 'BS Computer Science' }
+                ].map((field) => (
+                  <div key={field.name} className="flex flex-col gap-2">
+                    <label className="text-[10px] uppercase tracking-[0.2em] font-black text-slate-500 ml-1">{field.label}</label>
+                    <input 
+                      {...field} name={field.name} 
+                      onChange={handleChange} 
+                      className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-700" 
+                      required 
+                    />
+                  </div>
+                ))}
 
-            <div className="flex flex-col gap-2">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 ml-1">Email Address</label>
-                <input name="email" type="email" placeholder="email@example.com" onChange={handleChange} value={form.email} className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all placeholder:text-slate-600" required />
-            </div>
-
-            <div className="flex flex-col gap-2">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 ml-1">Contact Number</label>
-                <input name="contactNo" placeholder="03XXXXXXXXX" onChange={handleChange} value={form.contactNo} className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all placeholder:text-slate-600" required />
-            </div>
-
-            <div className="flex flex-col gap-2">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 ml-1">Expected Salary</label>
-                <input name="expectedSalary" type="number" placeholder="e.g. 50000" onChange={handleChange} value={form.expectedSalary} className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all placeholder:text-slate-600" required />
-            </div>
-
-            <div className="flex flex-col gap-2">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 ml-1">Graduation</label>
-                <input name="graduation" placeholder="e.g. BSCS" onChange={handleChange} value={form.graduation} className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all placeholder:text-slate-600" required />
-            </div>
-
-            <div className="flex flex-col gap-2">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 ml-1">Working Plan</label>
-                <select name="workingPlan" onChange={handleChange} value={form.workingPlan} className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer" required>
-                    <option value="" className="bg-slate-900">Select Plan</option>
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] uppercase tracking-[0.2em] font-black text-slate-500 ml-1">Working Plan</label>
+                  <select name="workingPlan" onChange={handleChange} className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-2xl text-white outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none cursor-pointer" required>
+                    <option value="" className="bg-slate-900">Choose Plan</option>
                     <option value="Full-Time" className="bg-slate-900">Full-Time</option>
                     <option value="Remote" className="bg-slate-900">Remote</option>
-                </select>
-            </div>
-            
-            <div className="flex flex-col gap-2 md:col-span-2">
-                <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 ml-1">Upload Photo</label>
-                <div className="bg-blue-500/5 border-2 border-dashed border-blue-500/20 p-6 rounded-2xl hover:bg-blue-500/10 transition-all group">
-                    <input name="graduationPhoto" type="file" onChange={handleFileChange} className="text-slate-400 text-sm file:mr-4 file:py-2 file:px-6 file:rounded-xl file:border-0 file:bg-blue-600 file:text-white file:font-bold file:cursor-pointer group-hover:file:bg-blue-500 transition-all" required />
+                  </select>
                 </div>
-            </div>
-            
-            <button 
-                type="submit" 
-                disabled={submitting} 
-                className="md:col-span-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 py-5 rounded-[1.5rem] text-white font-black tracking-widest transition-all shadow-xl shadow-blue-900/30 active:scale-[0.98] disabled:opacity-50 mt-4 uppercase"
+
+                <div className="md:col-span-2 flex flex-col gap-2">
+                  <label className="text-[10px] uppercase tracking-[0.2em] font-black text-slate-500 ml-1">Verification Document</label>
+                  <div className="group relative bg-blue-500/5 border-2 border-dashed border-blue-500/20 p-8 rounded-3xl hover:bg-blue-500/10 transition-all text-center">
+                    <input type="file" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" required />
+                    <p className="text-sm text-slate-400 font-medium group-hover:text-blue-400 transition-colors">
+                      {form.graduationPhoto ? form.graduationPhoto.name : 'Click or Drag photo to upload'}
+                    </p>
+                  </div>
+                </div>
+
+                <button 
+                  disabled={submitting}
+                  className="md:col-span-2 bg-gradient-to-r from-blue-600 to-indigo-600 py-5 rounded-2xl text-white font-black tracking-widest uppercase shadow-xl shadow-blue-900/20 active:scale-95 disabled:opacity-50 transition-all"
+                >
+                  {submitting ? 'Processing...' : 'Submit Application'}
+                </button>
+              </form>
+            </motion.div>
+          ) : (
+            /* --- DASHBOARD VIEW --- */
+            <motion.div 
+              key="dash-view" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+              className="space-y-6"
             >
-              {submitting ? 'Submitting...' : 'Send Application'}
-            </button>
-
-            {/* Login Overlay */}
-            {!isAuthenticated && (
-              <div className="absolute -inset-4 bg-slate-950/80 backdrop-blur-md flex items-center justify-center rounded-[2.5rem] z-20">
-                <motion.div initial={{scale:0.9}} animate={{scale:1}} className="bg-slate-900 p-8 rounded-3xl border border-white/10 shadow-2xl text-center max-w-sm">
-                    <h3 className="text-2xl font-black mb-2">RESTRICTED</h3>
-                    <p className="text-slate-400 text-sm mb-8 leading-relaxed">Unlock the portal to submit your student credentials.</p>
-                    <button type="button" onClick={() => setIsAuthenticated(true)} className="w-full bg-white text-black px-8 py-4 rounded-2xl font-black hover:bg-blue-400 transition-all uppercase tracking-tighter">
-                        Authorize Now
-                    </button>
-                </motion.div>
-              </div>
-            )}
-          </form>
-        ) : (
-          /* 3. Responsive Dashboard */
-          <div className="text-white">
-            {loadingStudents ? (
-               <div className="flex flex-col items-center justify-center py-20 gap-4">
-                 <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin"></div>
-                 <p className="text-slate-500 font-bold tracking-widest animate-pulse">SYNCING DATA...</p>
-               </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Mobile View: Cards | Desktop View: Table */}
-                <div className="hidden md:block overflow-hidden rounded-2xl border border-slate-800">
-                  <table className="w-full text-left border-collapse">
-                      <thead className="bg-slate-800/50 text-slate-400 text-[10px] uppercase font-bold tracking-widest">
-                          <tr>
-                              <th className="p-5">Name</th>
-                              <th className="p-5">Graduation</th>
-                              <th className="p-5">Plan</th>
-                              <th className="p-5 text-right">Action</th>
-                          </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800">
-                      {students.map(s => (
-                          <tr key={s._id} className="hover:bg-white/5 transition-colors">
-                            <td className="p-5">
-                                <div className="font-bold text-slate-200">{s.fullName}</div>
-                                <div className="text-xs text-slate-500">{s.email}</div>
-                            </td>
-                            <td className="p-5 text-sm font-medium">{s.graduation}</td>
-                            <td className="p-5">
-                                <span className={`text-[9px] px-3 py-1 rounded-full font-black uppercase ${s.workingPlan === 'Remote' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-blue-500/10 text-blue-500 border border-blue-500/20'}`}>
-                                    {s.workingPlan}
-                                </span>
-                            </td>
-                            <td className="p-5 text-right">
-                                <button onClick={() => setPhotoModalUrl(`${API_BASE_URL}${s.photoPath}`)} className="bg-white/5 hover:bg-white/10 p-2 px-5 rounded-xl text-[10px] font-bold transition-all border border-white/10 uppercase">View</button>
-                            </td>
-                          </tr>
-                      ))}
-                      </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile Card Layout */}
-                <div className="md:hidden space-y-4">
+              {loadingStudents ? (
+                <div className="text-center py-20 animate-pulse text-blue-500 font-black tracking-[0.5em]">LOADING DATA...</div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4">
                   {students.map(s => (
-                    <div key={s._id} className="bg-slate-800/40 border border-slate-700 p-5 rounded-2xl space-y-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="font-bold text-lg">{s.fullName}</div>
-                          <div className="text-xs text-slate-500">{s.email}</div>
+                    <motion.div 
+                      layout key={s._id} 
+                      className="bg-slate-900/60 border border-slate-800 p-5 rounded-[2rem] flex flex-col md:flex-row justify-between items-center gap-4 hover:border-blue-500/30 transition-all"
+                    >
+                      <div className="flex flex-col md:flex-row items-center gap-4 text-center md:text-left">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center font-black text-xl">
+                          {s.fullName[0]}
                         </div>
-                        <span className={`text-[9px] px-3 py-1 rounded-full font-black uppercase ${s.workingPlan === 'Remote' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-500'}`}>
-                          {s.workingPlan}
-                        </span>
+                        <div>
+                          <h3 className="font-black text-lg text-white">{s.fullName}</h3>
+                          <p className="text-xs text-slate-500">{s.email}</p>
+                        </div>
                       </div>
-                      <div className="flex justify-between items-center pt-2 border-t border-slate-700/50">
-                        <span className="text-xs text-slate-400">Graduation: <b className="text-slate-200">{s.graduation}</b></span>
-                        <button onClick={() => setPhotoModalUrl(`${API_BASE_URL}${s.photoPath}`)} className="bg-blue-600 px-4 py-2 rounded-lg text-xs font-bold">Photo</button>
+                      <div className="flex items-center gap-6">
+                        <div className="text-right hidden md:block">
+                          <p className="text-[10px] text-slate-500 uppercase font-black">Plan</p>
+                          <p className="text-sm font-bold text-blue-400">{s.workingPlan}</p>
+                        </div>
+                        <button 
+                          onClick={() => setPhotoModalUrl(`${API_BASE_URL}${s.photoPath}`)}
+                          className="bg-white text-black px-6 py-2.5 rounded-xl text-[10px] font-black uppercase hover:bg-blue-400 transition-all"
+                        >
+                          View Photo
+                        </button>
                       </div>
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-        
-        <AnimatePresence>
-            {successMessage && (
-                <motion.div initial={{opacity:0, y: 10}} animate={{opacity:1, y: 0}} exit={{opacity:0}} className="mt-8 bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl flex items-center gap-3">
-                    <p className="text-emerald-500 text-xs font-bold uppercase tracking-widest">{successMessage}</p>
-                </motion.div>
-            )}
-            {errorMessage && (
-                <motion.div initial={{opacity:0, y: 10}} animate={{opacity:1, y: 0}} exit={{opacity:0}} className="mt-8 bg-rose-500/10 border border-rose-500/20 p-4 rounded-2xl flex items-center gap-3">
-                    <p className="text-rose-500 text-xs font-bold uppercase tracking-widest">{errorMessage}</p>
-                </motion.div>
-            )}
+              )}
+            </motion.div>
+          )}
         </AnimatePresence>
-      </motion.div>
+      </main>
 
-      {/* Image Modal Preview */}
+      {/* --- LUXURIOUS ADMIN LOGIN OVERLAY --- */}
+      <AnimatePresence>
+        {showAdminLogin && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-[#020617]/90 backdrop-blur-2xl flex items-center justify-center p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 30 }}
+              className="bg-slate-900 border border-white/10 p-10 rounded-[3rem] shadow-[0_0_100px_rgba(37,99,235,0.15)] max-w-sm w-full text-center relative overflow-hidden"
+            >
+              <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-600/20 blur-[60px] rounded-full" />
+              <h2 className="text-3xl font-black text-white mb-2 tracking-tighter">ADMIN</h2>
+              <p className="text-slate-500 text-xs mb-8 font-medium">Verify your identity to proceed</p>
+              
+              <input 
+                type="password" placeholder="••••••••" 
+                value={adminPass} onChange={(e) => setAdminPass(e.target.value)}
+                className="w-full bg-black/40 border border-white/5 p-4 rounded-2xl text-center text-white outline-none focus:ring-2 focus:ring-blue-500/50 mb-6 transition-all"
+              />
+
+              <div className="flex gap-3">
+                <button onClick={() => setShowAdminLogin(false)} className="flex-1 text-slate-500 text-[10px] font-black uppercase tracking-widest">Back</button>
+                <button onClick={handleAdminVerify} className="flex-[2] bg-blue-600 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-600/20">Authorize</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* --- Success/Error Toasts --- */}
+      <AnimatePresence>
+        {(successMessage || errorMessage) && (
+          <motion.div 
+            initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }}
+            className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl ${successMessage ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}
+          >
+            {successMessage || errorMessage}
+            <button onClick={() => {setSuccessMessage(''); setErrorMessage('')}} className="ml-4 opacity-50">×</button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* --- Image Modal --- */}
       <AnimatePresence>
         {photoModalUrl && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setPhotoModalUrl(null)} className="fixed inset-0 bg-black/98 z-[100] flex flex-col items-center justify-center p-4 cursor-zoom-out backdrop-blur-xl">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative max-w-4xl w-full">
-                <img src={photoModalUrl} alt="Preview" className="max-h-[80vh] w-auto mx-auto rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/10" />
-                <p className="text-center mt-6 text-slate-500 text-xs font-bold tracking-[0.5em] uppercase">Click anywhere to close</p>
-            </motion.div>
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
+            onClick={() => setPhotoModalUrl(null)}
+            className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-4 backdrop-blur-xl cursor-zoom-out"
+          >
+            <motion.img 
+              initial={{ scale: 0.8 }} animate={{ scale: 1 }} 
+              src={photoModalUrl} className="max-h-[85vh] rounded-[2rem] shadow-2xl border border-white/10" 
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -318,7 +297,7 @@ function App() {
         }
         .animate-gradient-x {
           background-size: 200% 200%;
-          animation: gradient-x 5s ease infinite;
+          animation: gradient-x 5s linear infinite;
         }
       `}</style>
     </div>
