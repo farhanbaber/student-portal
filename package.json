@@ -4,6 +4,9 @@
     "@types/react-dom": "^19.2.3"
   },
   "dependencies": {
-    "cors": "^2.8.6"
+    "axios": "^1.13.6",
+    "cors": "^2.8.6",
+    "framer-motion": "^12.35.1",
+    "lucide-react": "^0.577.0"
   }
 }
