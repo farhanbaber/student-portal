@@ -4,7 +4,7 @@ import dotenv from 'dotenv'
 import mongoose from 'mongoose'
 import multer from 'multer'
 import path from 'path'
-import fs from 'fs' // Directory check karne ke liye
+import fs from 'fs' 
 import { fileURLToPath } from 'url'
 import { Student } from './models/Student.js'
 
@@ -13,22 +13,26 @@ dotenv.config()
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const app = express()
+const app = express() // Pehle app define kiya
 
-// 1. CHANGE: Port ko 0.0.0.0 par bind karna Railway ke liye zaroori hai
+// 1. Middlewares
 const PORT = process.env.PORT || 5000
 
-// 2. CHANGE: CORS ko behtar handle karein (Frontend URL ke liye jagah chhorein)
 app.use(
   cors({
-    origin: '*', // Production mein yahan apna Vercel URL dal dena
+    origin: '*', 
     methods: ['GET', 'POST'],
-  }),
+  })
 )
 
 app.use(express.json())
 
-// 3. CHANGE: Ensure uploads directory exists (Railway build ke waqt error nahi dega)
+// 2. ROOT ROUTE (Ab ye sahi jagah par hai)
+app.get('/', (req, res) => {
+  res.send('<h1>Student Portal Backend is Live! 🚀</h1><p>API is working perfectly.</p>');
+});
+
+// 3. Static Files & Uploads logic
 const uploadsDir = path.join(__dirname, 'uploads')
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
@@ -48,6 +52,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage })
 
+// 4. API Routes
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', message: 'Student API is running' })
 })
@@ -101,9 +106,12 @@ app.post('/api/submit', upload.single('graduationPhoto'), async (req, res) => {
     console.error('Error saving student:', error)
     return res.status(500).json({
       message: 'Failed to submit application.',
+      error: error.message
     })
   }
 })
+
+// 5. Start Server logic
 async function start() {
   const mongoUri = process.env.MONGO_URI
   if (!mongoUri) {
@@ -119,9 +127,9 @@ async function start() {
       console.log(`Server listening on port ${PORT}`)
     })
   } catch (error) {
-    // Yahan res nahi aa sakta, sirf console.log hoga
     console.error('DATABASE CONNECTION ERROR:', error)
     process.exit(1)
   }
 }
+
 start()
